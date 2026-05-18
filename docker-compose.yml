@@ -1,0 +1,82 @@
+version: '3.9'
+
+services:
+
+  auth-service:
+    build: .
+
+    container_name: auth-service
+
+    restart: always
+
+    depends_on:
+      - postgres
+      - redis
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      APP_PORT: 8080
+
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: auth_service
+      DB_SSLMODE: disable
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD:
+
+      JWT_SECRET: 4f9d7c2e8a1b6f3d9c5e7a2b1f8d4c6e9a7b3d1f5c8e2a6b9d4f7c1e3a8b5d2
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:17
+
+    container_name: auth-postgres
+
+    restart: always
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_service
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8
+
+    container_name: auth-redis
+
+    restart: always
+
+    ports:
+      - "6379:6379"
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
