@@ -10,11 +10,11 @@ import (
 )
 
 type AuthHandler struct {
-	authService *service.AuthService // ✅ lowercase
+	authService service.AuthServicePort // ✅ interface ไม่ใช่ *struct
 }
 
-func NewAuthHandler(authService *service.AuthService) *AuthHandler {
-	return &AuthHandler{authService: authService}
+func NewAuthHandler(s service.AuthServicePort) *AuthHandler {
+	return &AuthHandler{authService: s} // ✅ lowercase field
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -26,7 +26,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := utils.Validate.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"errors": utils.FormatValidationError(err)})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"errors": utils.FormatValidationError(err),
+		})
 		return
 	}
 
@@ -47,7 +49,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if err := utils.Validate.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"errors": utils.FormatValidationError(err)})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"errors": utils.FormatValidationError(err),
+		})
 		return
 	}
 
@@ -85,7 +89,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	// ✅ เรียกผ่าน service เท่านั้น — handler ไม่รู้จัก repo เลย
+	// ✅ เรียกผ่าน interface — ไม่รู้จัก repo หรือ gorm เลย
 	if err := h.authService.Logout(req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
