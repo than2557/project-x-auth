@@ -10,90 +10,50 @@ import (
 )
 
 type AuthHandler struct {
-	AuthService *service.AuthService
+	authService *service.AuthService // ✅ lowercase
 }
 
-func NewAuthHandler(
-	authService *service.AuthService,
-) *AuthHandler {
-
-	return &AuthHandler{
-		AuthService: authService,
-	}
+func NewAuthHandler(authService *service.AuthService) *AuthHandler {
+	return &AuthHandler{authService: authService}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
-
 	var req dto.RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := utils.Validate.Struct(req)
-
-	if err != nil {
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"errors": utils.FormatValidationError(err),
-		})
-
+	if err := utils.Validate.Struct(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"errors": utils.FormatValidationError(err)})
 		return
 	}
 
-	err = h.AuthService.Register(req)
-
-	if err != nil {
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-
+	if err := h.authService.Register(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "register success",
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "register success"})
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
-
 	var req dto.LoginRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := utils.Validate.Struct(req)
-
-	if err != nil {
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"errors": utils.FormatValidationError(err),
-		})
-
+	if err := utils.Validate.Struct(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"errors": utils.FormatValidationError(err)})
 		return
 	}
 
-	res, err := h.AuthService.Login(req)
-
+	res, err := h.authService.Login(req)
 	if err != nil {
-
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": err.Error(),
-		})
-
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -101,26 +61,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Refresh(c *gin.Context) {
-
 	var req dto.RefreshRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	res, err := h.AuthService.RefreshToken(req)
-
+	res, err := h.authService.RefreshToken(req)
 	if err != nil {
-
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": err.Error(),
-		})
-
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -128,43 +78,18 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-
 	var req dto.RefreshRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	refresh, err := h.AuthService.RefreshRepo.
-		FindByToken(req.RefreshToken)
-
-	if err != nil {
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid refresh token",
-		})
-
+	// ✅ เรียกผ่าน service เท่านั้น — handler ไม่รู้จัก repo เลย
+	if err := h.authService.Logout(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err = h.AuthService.RefreshRepo.
-		Revoke(refresh.ID.String())
-
-	if err != nil {
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "logout failed",
-		})
-
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "logout success",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "logout success"})
 }
