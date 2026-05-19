@@ -8,15 +8,22 @@ import (
 	"auth-service/internal/token"
 	"auth-service/internal/utils"
 	"errors"
-	"fmt"
-	"strconv"
 	"time"
 )
 
+// AuthServicePort คือ interface ที่ handler ใช้
+// เพิ่ม method ใหม่ที่นี่ก็พอ ไม่ต้องแก้ handler
+type AuthServicePort interface {
+	Register(req dto.RegisterRequest) error
+	Login(req dto.LoginRequest) (*dto.LoginResponse, error)
+	RefreshToken(req dto.RefreshRequest) (*dto.LoginResponse, error)
+	Logout(req dto.RefreshRequest) error
+}
+
 type AuthService struct {
-	userRepo    *repository.UserRepository    // ✅ lowercase
-	refreshRepo *repository.RefreshRepository // ✅ lowercase
-	config      *config.Config                // ✅ lowercase
+	UserRepo    *repository.UserRepository
+	RefreshRepo *repository.RefreshRepository
+	Config      *config.Config
 }
 
 func NewAuthService(
@@ -25,25 +32,15 @@ func NewAuthService(
 	cfg *config.Config,
 ) *AuthService {
 	return &AuthService{
-		userRepo:    userRepo,
-		refreshRepo: refreshRepo,
-		config:      cfg,
+		UserRepo:    userRepo,
+		RefreshRepo: refreshRepo,
+		Config:      cfg,
 	}
-}
-
-// jwtExpire แปลง JWTExpireHour จาก config → time.Duration
-// ถ้าค่าว่างหรือ parse ไม่ได้ fallback เป็น 24h พร้อม log เตือน
-func (s *AuthService) jwtExpire() time.Duration {
-	hours, err := strconv.Atoi(s.config.JWTExpireHour)
-	if err != nil || hours <= 0 {
-		return 24 * time.Hour // fallback
-	}
-	return time.Duration(hours) * time.Hour
 }
 
 func (s *AuthService) Register(req dto.RegisterRequest) error {
-	existing, _ := s.userRepo.FindByEmail(req.Email)
-	if existing != nil {
+	existingUser, _ := s.UserRepo.FindByEmail(req.Email)
+	if existingUser != nil {
 		return errors.New("email already exists")
 	}
 
@@ -58,11 +55,11 @@ func (s *AuthService) Register(req dto.RegisterRequest) error {
 		Password: hashedPassword,
 	}
 
-	return s.userRepo.Create(&user)
+	return s.UserRepo.Create(&user)
 }
 
 func (s *AuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
-	user, err := s.userRepo.FindByEmail(req.Email)
+	user, err := s.UserRepo.FindByEmail(req.Email)
 	if err != nil {
 		return nil, errors.New("invalid email or password")
 	}
@@ -74,8 +71,7 @@ func (s *AuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 	accessToken, err := token.GenerateAccessToken(
 		user.ID.String(),
 		user.Email,
-		s.config.JWTSecret,
-		s.jwtExpire(), // ✅ ใช้ expire จาก config
+		s.Config.JWTSecret,
 	)
 	if err != nil {
 		return nil, err
@@ -92,7 +88,7 @@ func (s *AuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 	}
 
-	if err := s.refreshRepo.Create(&refreshModel); err != nil {
+	if err := s.RefreshRepo.Create(&refreshModel); err != nil {
 		return nil, err
 	}
 
@@ -104,7 +100,7 @@ func (s *AuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 }
 
 func (s *AuthService) RefreshToken(req dto.RefreshRequest) (*dto.LoginResponse, error) {
-	refresh, err := s.refreshRepo.FindByToken(req.RefreshToken)
+	refresh, err := s.RefreshRepo.FindByToken(req.RefreshToken)
 	if err != nil {
 		return nil, errors.New("invalid refresh token")
 	}
@@ -117,21 +113,20 @@ func (s *AuthService) RefreshToken(req dto.RefreshRequest) (*dto.LoginResponse, 
 		return nil, errors.New("refresh token expired")
 	}
 
-	if err := s.refreshRepo.Revoke(refresh.ID.String()); err != nil {
+	if err := s.RefreshRepo.Revoke(refresh.ID.String()); err != nil {
 		return nil, err
 	}
 
-	// ✅ ใช้ FindByID แทนการเรียก .DB โดยตรง
-	user, err := s.userRepo.FindByID(refresh.UserID)
+	var user model.User
+	err = s.UserRepo.DB.First(&user, "id = ?", refresh.UserID).Error
 	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
+		return nil, err
 	}
 
 	newAccessToken, err := token.GenerateAccessToken(
 		user.ID.String(),
 		user.Email,
-		s.config.JWTSecret,
-		s.jwtExpire(), // ✅ ใช้ expire จาก config
+		s.Config.JWTSecret,
 	)
 	if err != nil {
 		return nil, err
@@ -148,7 +143,7 @@ func (s *AuthService) RefreshToken(req dto.RefreshRequest) (*dto.LoginResponse, 
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 	}
 
-	if err := s.refreshRepo.Create(&refreshModel); err != nil {
+	if err := s.RefreshRepo.Create(&refreshModel); err != nil {
 		return nil, err
 	}
 
@@ -159,9 +154,9 @@ func (s *AuthService) RefreshToken(req dto.RefreshRequest) (*dto.LoginResponse, 
 	}, nil
 }
 
-// ✅ Logout อยู่ใน service layer — handler ไม่ต้องรู้จัก repo เลย
+// ✅ Logout อยู่ใน service layer
 func (s *AuthService) Logout(req dto.RefreshRequest) error {
-	refresh, err := s.refreshRepo.FindByToken(req.RefreshToken)
+	refresh, err := s.RefreshRepo.FindByToken(req.RefreshToken)
 	if err != nil {
 		return errors.New("invalid refresh token")
 	}
@@ -170,5 +165,5 @@ func (s *AuthService) Logout(req dto.RefreshRequest) error {
 		return errors.New("token already revoked")
 	}
 
-	return s.refreshRepo.Revoke(refresh.ID.String())
+	return s.RefreshRepo.Revoke(refresh.ID.String())
 }
