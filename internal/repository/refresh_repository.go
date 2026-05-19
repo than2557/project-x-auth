@@ -7,30 +7,21 @@ import (
 )
 
 type RefreshRepository struct {
-	DB *gorm.DB
+	db *gorm.DB // ✅ lowercase
 }
 
 func NewRefreshRepository(db *gorm.DB) *RefreshRepository {
-
-	return &RefreshRepository{
-		DB: db,
-	}
+	return &RefreshRepository{db: db}
 }
 
-func (r *RefreshRepository) Create(
-	token *model.RefreshToken,
-) error {
-
-	return r.DB.Create(token).Error
+func (r *RefreshRepository) Create(token *model.RefreshToken) error {
+	return r.db.Create(token).Error
 }
 
-func (r *RefreshRepository) FindByToken(
-	token string,
-) (*model.RefreshToken, error) {
-
+func (r *RefreshRepository) FindByToken(token string) (*model.RefreshToken, error) {
 	var refresh model.RefreshToken
 
-	err := r.DB.
+	err := r.db.
 		Where("token = ?", token).
 		First(&refresh).Error
 
@@ -41,11 +32,8 @@ func (r *RefreshRepository) FindByToken(
 	return &refresh, nil
 }
 
-func (r *RefreshRepository) Revoke(
-	id string,
-) error {
-
-	return r.DB.Model(&model.RefreshToken{}).
+func (r *RefreshRepository) Revoke(id string) error {
+	return r.db.Model(&model.RefreshToken{}).
 		Where("id = ?", id).
 		Update("revoked", true).Error
 }
