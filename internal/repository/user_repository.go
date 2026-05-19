@@ -3,28 +3,42 @@ package repository
 import (
 	"auth-service/internal/model"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type UserRepository struct {
-	DB *gorm.DB
+	db *gorm.DB // ✅ lowercase — ไม่ expose ออกนอก package
 }
 
 func NewUserRepository(db *gorm.DB) *UserRepository {
-	return &UserRepository{DB: db}
+	return &UserRepository{db: db}
 }
 
 func (r *UserRepository) Create(user *model.User) error {
-
-	return r.DB.Create(user).Error
+	return r.db.Create(user).Error
 }
 
 func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
-
 	var user model.User
 
-	err := r.DB.
+	err := r.db.
 		Where("email = ?", email).
+		First(&user).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// ✅ เพิ่ม FindByID — ให้ service ใช้แทนการเรียก .DB โดยตรง
+func (r *UserRepository) FindByID(id uuid.UUID) (*model.User, error) {
+	var user model.User
+
+	err := r.db.
+		Where("id = ?", id).
 		First(&user).Error
 
 	if err != nil {
